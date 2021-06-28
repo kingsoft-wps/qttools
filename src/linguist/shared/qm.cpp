@@ -655,9 +655,11 @@ bool saveQM(const Translator &translator, QIODevice &dev, ConversionData &cd)
                 continue;
             }
             if (typ == TranslatorMessage::Unfinished) {
-                if (msg.translation().isEmpty() && !cd.m_idBased && cd.m_unTrPrefix.isEmpty()) {
-                    ++untranslated;
-                    continue;
+                if (msg.translation().isEmpty()
+                    && cd.m_unTrPrefix.isEmpty()
+                    && (!cd.m_idBased || (cd.m_idBased && cd.ignoreUntranslatedWhenIdbased()))) {
+                        ++untranslated;
+                        continue;
                 } else {
                     if (cd.ignoreUnfinished())
                         continue;

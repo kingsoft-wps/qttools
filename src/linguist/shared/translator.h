@@ -55,6 +55,7 @@ public:
     ConversionData() :
         m_verbose(false),
         m_ignoreUnfinished(false),
+        m_ignoreUntranslatedWhenIdbased(false),
         m_sortContexts(false),
         m_noUiLines(false),
         m_idBased(false),
@@ -67,6 +68,7 @@ public:
     const QDir &targetDir() const { return m_targetDir; }
     bool isVerbose() const { return m_verbose; }
     bool ignoreUnfinished() const { return m_ignoreUnfinished; }
+    bool ignoreUntranslatedWhenIdbased() const { return m_ignoreUntranslatedWhenIdbased; }
     bool sortContexts() const { return m_sortContexts; }
 
     void appendError(const QString &error) { m_errors.append(error); }
@@ -90,6 +92,7 @@ public:
     QStringList m_errors;
     bool m_verbose;
     bool m_ignoreUnfinished;
+    bool m_ignoreUntranslatedWhenIdbased;
     bool m_sortContexts;
     bool m_noUiLines;
     bool m_idBased;

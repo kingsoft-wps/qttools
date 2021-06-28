@@ -361,6 +361,11 @@ void HelpViewer::mouseReleaseEvent(QMouseEvent *event)
     QWebView::mouseReleaseEvent(event);
 }
 
+void HelpViewer::resizeEvent(QResizeEvent *e)
+{
+    QWebView::resizeEvent(e);
+}
+
 // -- private slots
 
 void HelpViewer::actionChanged()
