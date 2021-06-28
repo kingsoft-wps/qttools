@@ -98,6 +98,9 @@ static void printUsage()
         "           Compress the QM files\n"
         "    -nounfinished\n"
         "           Do not include unfinished translations\n"
+        "    -nountranslatedwhenidbased\n"
+        "           Do not include untranslated messages when use IDs\n"
+        "           instead of source strings for message keying\n"
         "    -removeidentical\n"
         "           If the translated text is the same as\n"
         "           the source text, do not include the message\n"
@@ -241,6 +244,7 @@ int main(int argc, char **argv)
     Translator tor;
     QStringList inputFiles;
     QString outputFile;
+	
 
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "-compress")) {
@@ -257,6 +261,9 @@ int main(int argc, char **argv)
             continue;
         } else if (!strcmp(argv[i], "-nounfinished")) {
             cd.m_ignoreUnfinished = true;
+            continue;
+        } else if (!strcmp(argv[i], "-nountranslatedwhenidbased")) {
+            cd.m_ignoreUntranslatedWhenIdbased = true;
             continue;
         } else if (!strcmp(argv[i], "-markuntranslated")) {
             if (i == argc - 1) {
