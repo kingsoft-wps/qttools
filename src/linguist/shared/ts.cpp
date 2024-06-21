@@ -544,7 +544,7 @@ bool saveTS(const Translator &translator, QIODevice &dev, ConversionData &cd)
 
     writeExtras(t, "    ", translator.extras(), drops);
 
-    QHash<QString, QList<TranslatorMessage> > messageOrder;
+    QHash<QString, QList<TranslatorMessage>> messageOrder;
     QList<QString> contextOrder;
     foreach (const TranslatorMessage &msg, translator.messages()) {
         // no need for such noise

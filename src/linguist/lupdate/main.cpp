@@ -236,6 +236,13 @@ static void printUsage()
         "           Only include plural form messages.\n"
         "    -silent\n"
         "           Do not explain what is being done.\n"
+        "    -all-message\n"
+        "           Print all information.\n"
+        "    -var-func\n"
+        "           Print the position information of tr()/translate() function for indirect parameter transfer.\n"
+        "    -lose-tr\n"
+        "           Record the deleted finished/unfinished translation information and write it into\n" 
+        "           the ***.csv file (*** depends on ***.ts).\n"
         "    -no-sort\n"
         "           Do not sort contexts in TS files.\n"
         "    -no-recursive\n"
@@ -395,7 +402,7 @@ static void updateTsFiles(const Translator &fetchedTor, const QStringList &tsFil
         UpdateOptions theseOptions = options;
         if (tor.locationsType() == Translator::NoLocations) // Could be set from file
             theseOptions |= NoLocations;
-        Translator out = merge(tor, fetchedTor, aliens, theseOptions, err);
+        Translator out = merge(tor, fetchedTor, aliens, theseOptions, err, fileName);
 
         if ((options & Verbose) && !err.isEmpty()) {
             printOut(err);
@@ -868,9 +875,7 @@ int main(int argc, char **argv)
     QString targetLanguage;
     QString sourceLanguage;
 
-    UpdateOptions options =
-        Verbose | // verbose is on by default starting with Qt 4.2
-        HeuristicSameText | HeuristicSimilarText | HeuristicNumber;
+    UpdateOptions options = Verbose | IgnoreNotImportMessage;
     int proDebug = 0;
     int numFiles = 0;
     bool metTsFlag = false;
@@ -899,6 +904,18 @@ int main(int argc, char **argv)
             continue;
         } else if (arg == QLatin1String("-silent")) {
             options &= ~Verbose;
+            continue;
+        }
+        else if (arg == QLatin1String("-all-message")) {
+            options &= ~IgnoreNotImportMessage;
+            continue;
+        }
+        else if (arg == QLatin1String("-var-func")) {
+            options |= RecordVarFuncPos;
+            continue;
+        } 
+        else if (arg == QLatin1String("-lose-tr")) {
+            options |= RecordDeletedTr;
             continue;
         } else if (arg == QLatin1String("-pro-debug")) {
             proDebug++;
@@ -1172,6 +1189,8 @@ int main(int argc, char **argv)
         cd.m_projectRoots = projectRoots;
         cd.m_includePath = includePath;
         cd.m_allCSources = allCSources;
+        cd.m_bShowAllMessage = !(options & IgnoreNotImportMessage);
+        cd.m_bRecordVarFuncPos = options & RecordVarFuncPos;
         if (!resourceFiles.isEmpty()) {
             QMakeVfs vfs;
             foreach (const QString &resource, resourceFiles)

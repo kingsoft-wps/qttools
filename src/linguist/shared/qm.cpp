@@ -67,9 +67,9 @@ enum Tag {
 enum Prefix {
     NoPrefix,
     Hash,
-    HashContext,
-    HashContextSourceText,
-    HashContextSourceTextComment
+    HashComment,
+    HashCommentContext,
+    HashCommentContextSourceText
 };
 
 } // namespace anon
@@ -123,10 +123,18 @@ Q_DECLARE_TYPEINFO(ByteTranslatorMessage, Q_MOVABLE_TYPE);
 
 bool ByteTranslatorMessage::operator<(const ByteTranslatorMessage& m) const
 {
+    auto h1 = elfHash(this->sourceText() + this->context());
+    auto h2 = elfHash(m.sourceText() + m.context());
+    if (h1 != h2)
+        return h1 < h2;
     if (m_context != m.m_context)
         return m_context < m.m_context;
     if (m_sourcetext != m.m_sourcetext)
         return m_sourcetext < m.m_sourcetext;
+    if (m_comment == m.comment()) {
+        qWarning("The same message with two different translations! hash: %d source: %s context: %s\n",
+            h1, m_sourcetext.constData(), m_context.constData());
+    }
     return m_comment < m.m_comment;
 }
 
@@ -201,20 +209,20 @@ QByteArray Releaser::originalBytes(const QString &str) const
 
 uint Releaser::msgHash(const ByteTranslatorMessage &msg)
 {
-    return elfHash(msg.sourceText() + msg.comment());
+    return elfHash(msg.sourceText() + msg.context());
 }
 
 Prefix Releaser::commonPrefix(const ByteTranslatorMessage &m1, const ByteTranslatorMessage &m2)
 {
     if (msgHash(m1) != msgHash(m2))
         return NoPrefix;
-    if (m1.context() != m2.context())
-        return Hash;
-    if (m1.sourceText() != m2.sourceText())
-        return HashContext;
     if (m1.comment() != m2.comment())
-        return HashContextSourceText;
-    return HashContextSourceTextComment;
+        return Hash;
+    if (m1.context() != m2.context())
+        return HashComment;
+    if (m1.sourceText() != m2.sourceText())
+        return HashCommentContext;
+    return HashCommentContextSourceText;
 }
 
 void Releaser::writeMessage(const ByteTranslatorMessage &msg, QDataStream &stream,
@@ -224,19 +232,21 @@ void Releaser::writeMessage(const ByteTranslatorMessage &msg, QDataStream &strea
         stream << quint8(Tag_Translation) << msg.translations().at(i);
 
     if (mode == SaveEverything)
-        prefix = HashContextSourceTextComment;
+        prefix = HashCommentContextSourceText;
 
     // lrelease produces "wrong" QM files for QByteArrays that are .isNull().
     switch (prefix) {
     default:
-    case HashContextSourceTextComment:
-        stream << quint8(Tag_Comment) << msg.comment();
-        Q_FALLTHROUGH();
-    case HashContextSourceText:
+    case HashCommentContextSourceText:
         stream << quint8(Tag_SourceText) << msg.sourceText();
         Q_FALLTHROUGH();
-    case HashContext:
+    case HashCommentContext:
         stream << quint8(Tag_Context) << msg.context();
+        Q_FALLTHROUGH();
+    case HashComment:
+        stream << quint8(Tag_Comment) << msg.comment();
+        Q_FALLTHROUGH();
+    case Hash:
         break;
     }
 
@@ -309,7 +319,7 @@ void Releaser::squeeze(TranslatorSaveMode mode)
         else
             cpNext = commonPrefix(it.key(), next.key());
         offsets.insert(Offset(msgHash(it.key()), ms.device()->pos()), (void *)0);
-        writeMessage(it.key(), ms, mode, Prefix(qMax(cpPrev, cpNext + 1)));
+        writeMessage(it.key(), ms, mode, Prefix(qMax(cpPrev, cpNext) + 1));
     }
 
     QMap<Offset, void *>::Iterator offset;
@@ -685,7 +695,8 @@ bool saveQM(const Translator &translator, QIODevice &dev, ConversionData &cd)
                 // unless we already dropped the comment of (context,
                 // sourceText, comment0).
                 bool forceComment =
-                        msg.comment().isEmpty()
+                        cd.m_saveMode == SaveStripped
+                        || msg.comment().isEmpty()
                         || msg.context().isEmpty()
                         || containsStripped(translator, msg);
                 releaser.insert(msg, tlns, forceComment);

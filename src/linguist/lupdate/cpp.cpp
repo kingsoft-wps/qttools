@@ -199,7 +199,7 @@ public:
     void parseInternal(ConversionData &cd, const QStringList &includeStack, QSet<QString> &inclusions);
     const ParseResults *recordResults(bool isHeader);
     void deleteResults() { delete results; }
-
+    QString getAllLineNumber();
     struct SavedState {
         NamespaceList namespaces;
         QStack<int> namespaceDepths;
@@ -335,6 +335,7 @@ private:
     QString functionContextUnresolved;
     QString prospectiveContext;
     QString pendingContext;
+    QString strAllLineNumber;
     ParseResults *results;
     Translator *tor;
     bool directInclude;
@@ -342,6 +343,7 @@ private:
     SavedState savedState;
     int yyMinBraceDepth;
     bool inDefine;
+    bool bShowAllMessage;
 };
 
 CppParser::CppParser(ParseResults *_results)
@@ -364,6 +366,7 @@ CppParser::CppParser(ParseResults *_results)
     yyAtNewline = true;
     yyMinBraceDepth = 0;
     inDefine = false;
+    bShowAllMessage = false;
 }
 
 
@@ -614,9 +617,10 @@ CppParser::TokenType CppParser::getToken()
                             if (yyBracketDepth != is.bracketDepth1st
                                 || yyBraceDepth != is.braceDepth1st
                                 || yyParenDepth != is.parenDepth1st)
-                                yyMsg(is.elseLine)
-                                    << qPrintable(LU::tr("Parenthesis/bracket/brace mismatch between "
-                                                         "#if and #else branches; using #if branch\n"));
+                                if (bShowAllMessage)
+                                    yyMsg(is.elseLine)
+                                        << qPrintable(LU::tr("Parenthesis/bracket/brace mismatch between "
+                                                             "#if and #else branches; using #if branch\n"));
                         } else {
                             is.bracketDepth1st = yyBracketDepth;
                             is.braceDepth1st = yyBraceDepth;
@@ -637,9 +641,10 @@ CppParser::TokenType CppParser::getToken()
                             if (yyBracketDepth != is.bracketDepth1st
                                 || yyBraceDepth != is.braceDepth1st
                                 || yyParenDepth != is.parenDepth1st)
-                                yyMsg(is.elseLine)
-                                    << qPrintable(LU::tr("Parenthesis/brace mismatch between "
-                                                         "#if and #else branches; using #if branch\n"));
+                                if (bShowAllMessage)
+                                    yyMsg(is.elseLine)
+                                        << qPrintable(LU::tr("Parenthesis/brace mismatch between "
+                                                             "#if and #else branches; using #if branch\n"));
                             yyBracketDepth = is.bracketDepth1st;
                             yyBraceDepth = is.braceDepth1st;
                             yyParenDepth = is.parenDepth1st;
@@ -934,7 +939,7 @@ CppParser::TokenType CppParser::getToken()
                 return Tok_LeftBrace;
             case '}':
                 if (yyBraceDepth == yyMinBraceDepth) {
-                    if (!inDefine)
+                    if (!inDefine && bShowAllMessage)
                         yyMsg(yyCurLineNo)
                             << qPrintable(LU::tr("Excess closing brace in C++ code"
                                                  " (or abuse of the C++ preprocessor)\n"));
@@ -952,12 +957,15 @@ CppParser::TokenType CppParser::getToken()
                 yyCh = getChar();
                 return Tok_LeftParen;
             case ')':
-                if (yyParenDepth == 0)
-                    yyMsg(yyCurLineNo)
-                        << qPrintable(LU::tr("Excess closing parenthesis in C++ code"
-                                             " (or abuse of the C++ preprocessor)\n"));
-                else
+                if (yyParenDepth == 0) {
+                    if (bShowAllMessage)
+                        yyMsg(yyCurLineNo)
+                            << qPrintable(LU::tr("Excess closing parenthesis in C++ code"
+                                                 " (or abuse of the C++ preprocessor)\n"));
+                }
+                else {
                     yyParenDepth--;
+                }
                 yyCh = getChar();
                 return Tok_RightParen;
             case '[':
@@ -967,12 +975,15 @@ CppParser::TokenType CppParser::getToken()
                 yyCh = getChar();
                 return Tok_LeftBracket;
             case ']':
-                if (yyBracketDepth == 0)
-                    yyMsg(yyCurLineNo)
-                        << qPrintable(LU::tr("Excess closing bracket in C++ code"
-                                             " (or abuse of the C++ preprocessor)\n"));
-                else
+                if (yyBracketDepth == 0) {
+                    if (bShowAllMessage)
+                        yyMsg(yyCurLineNo)
+                            << qPrintable(LU::tr("Excess closing bracket in C++ code"
+                                                 " (or abuse of the C++ preprocessor)\n"));
+                }
+                else {
                     yyBracketDepth--;
+                }
                 yyCh = getChar();
                 return Tok_RightBracket;
             case ',':
@@ -1584,8 +1595,9 @@ void CppParser::handleTr(QString &prefix, bool plural)
             NamespaceList unresolved;
             if (!fullyQualify(namespaces, pendingContext, true, &functionContext, &unresolved)) {
                 functionContextUnresolved = stringifyNamespace(0, unresolved);
-                yyMsg() << qPrintable(LU::tr("Qualifying with unknown namespace/class %1::%2\n")
-                                      .arg(stringifyNamespace(functionContext)).arg(unresolved.first().value()));
+                if (bShowAllMessage)
+                    yyMsg() << qPrintable(LU::tr("Qualifying with unknown namespace/class %1::%2\n")
+                        .arg(stringifyNamespace(functionContext)).arg(unresolved.first().value()));
             }
             pendingContext.clear();
         }
@@ -1657,6 +1669,64 @@ void CppParser::handleTr(QString &prefix, bool plural)
 
       gotctx:
         recordMessage(line, context, text, comment, extracomment, msgid, extra, plural);
+    } else if (Tok_Ident == yyTok) {
+        //Mainly used to check whether the tr() function context of indirect parameter transfer is correct
+        QString tempFunctionContextUnresolved = functionContextUnresolved;
+        QString tempContext = context;
+        QString tempPrefix = prefix;
+        NamespaceList tempFunctionContext = functionContext;
+        if (!pendingContext.isEmpty() && !tempPrefix.startsWith(QLatin1String("::"))) {
+            NamespaceList unresolved;
+            if (!fullyQualify(namespaces, pendingContext, true, &tempFunctionContext, &unresolved)) {
+                tempFunctionContextUnresolved = stringifyNamespace(0, unresolved);
+                if (bShowAllMessage)
+                    yyMsg() << qPrintable(LU::tr("Qualifying with unknown namespace/class %1::%2\n")
+                        .arg(stringifyNamespace(tempFunctionContext)).arg(unresolved.first().value()));
+            }
+        }
+        if (tempPrefix.isEmpty()) {
+            if (tempFunctionContextUnresolved.isEmpty()) {
+                int idx = tempFunctionContext.length();
+                if (idx < 2) {
+                    yyMsg() << qPrintable(LU::tr("tr() cannot be called without context\n"));
+                    goto endcheck;
+                }
+                Namespace* fctx = NULL;
+                while (!(fctx = findNamespace(tempFunctionContext, idx)->classDef)->hasTrFunctions) {
+                    if (idx == 1) {
+                        tempContext = stringifyNamespace(tempFunctionContext);
+                        fctx = findNamespace(tempFunctionContext)->classDef;
+                        if (!fctx->complained) {
+                            yyMsg() << qPrintable(LU::tr("Class '%1' lacks Q_OBJECT macro\n")
+                                .arg(tempContext));
+                            fctx->complained = true;
+                        }
+                        goto endcheck;
+                    }
+                    --idx;
+                }
+            }
+        }
+        else {
+            tempPrefix.chop(2);
+            NamespaceList nsl;
+            NamespaceList unresolved;
+            if (fullyQualify(functionContext, tempPrefix, false, &nsl, &unresolved)) {
+                Namespace* fctx = findNamespace(nsl)->classDef;
+                if (fctx->trQualification.isEmpty()) {
+                    tempContext = stringifyNamespace(nsl);
+                    fctx->trQualification = tempContext;
+                }
+                else {
+                    tempContext = fctx->trQualification;
+                }
+                if (!fctx->hasTrFunctions && !fctx->complained) {
+                    yyMsg() << qPrintable(LU::tr("Class '%1' lacks Q_OBJECT macro\n").arg(tempContext));
+                }
+            }
+        }
+    endcheck:
+        strAllLineNumber += (QString::number(line) + QLatin1String("; "));
     }
     sourcetext.clear(); // Will have warned about that already
     extracomment.clear();
@@ -1711,6 +1781,9 @@ void CppParser::handleTranslate(bool plural)
         }
         recordMessage(line, context, text, comment, extracomment, msgid, extra, plural);
     }
+    else if (yyTok == Tok_Ident) {
+        strAllLineNumber += (QString::number(line) + QLatin1String("; "));
+    }
     sourcetext.clear(); // Will have warned about that already
     extracomment.clear();
     msgid.clear();
@@ -1764,7 +1837,7 @@ void CppParser::parse(ConversionData &cd, const QStringList &includeStack,
     namespaces << HashString();
     functionContext = namespaces;
     functionContextUnresolved.clear();
-
+    bShowAllMessage = cd.m_bShowAllMessage;
     parseInternal(cd, includeStack, inclusions);
 }
 
@@ -1868,7 +1941,7 @@ void CppParser::parseInternal(ConversionData &cd, const QStringList &includeStac
                     }
                 }
 
-                if (yyTok == Tok_Colon || yyTok == Tok_Other) {
+                if (yyTok == Tok_Colon) {
                     // Skip any token until '{' or ';' since we might do things wrong if we find
                     // a '::' or ':' token here.
                     do {
@@ -1890,7 +1963,8 @@ void CppParser::parseInternal(ConversionData &cd, const QStringList &includeStac
                     // Forward-declared class definitions can be namespaced.
                     NamespaceList nsl;
                     if (!fullyQualify(namespaces, quali, true, &nsl, 0)) {
-                        yyMsg() << qPrintable(LU::tr("Ignoring definition of undeclared qualified class\n"));
+                        if (bShowAllMessage)
+                            yyMsg() << qPrintable(LU::tr("Ignoring definition of undeclared qualified class\n"));
                         break;
                     }
                     namespaceDepths.push(namespaces.count());
@@ -2123,7 +2197,8 @@ void CppParser::parseInternal(ConversionData &cd, const QStringList &includeStac
             prospectiveContext.clear();
             prefix.clear();
             if (!sourcetext.isEmpty() || !extracomment.isEmpty() || !msgid.isEmpty() || !extra.isEmpty()) {
-                yyMsg() << qPrintable(LU::tr("Discarding unconsumed meta data\n"));
+                if (bShowAllMessage)
+                    yyMsg() << qPrintable(LU::tr("Discarding unconsumed meta data\n"));
                 sourcetext.clear();
                 extracomment.clear();
                 msgid.clear();
@@ -2196,18 +2271,22 @@ void CppParser::parseInternal(ConversionData &cd, const QStringList &includeStac
     }
 
   goteof:
-    if (yyBraceDepth != 0)
-        yyMsg(yyBraceLineNo)
-            << qPrintable(LU::tr("Unbalanced opening brace in C++ code"
-                                 " (or abuse of the C++ preprocessor)\n"));
-    else if (yyParenDepth != 0)
-        yyMsg(yyParenLineNo)
-            << qPrintable(LU::tr("Unbalanced opening parenthesis in C++ code"
-                                 " (or abuse of the C++ preprocessor)\n"));
-    else if (yyBracketDepth != 0)
-        yyMsg(yyBracketLineNo)
-            << qPrintable(LU::tr("Unbalanced opening bracket in C++ code"
-                                 " (or abuse of the C++ preprocessor)\n"));
+    if (yyBraceDepth != 0) {
+        if (bShowAllMessage)
+            yyMsg(yyBraceLineNo)
+                << qPrintable(LU::tr("Unbalanced opening brace in C++ code"
+                                     " (or abuse of the C++ preprocessor)\n"));
+    } else if (yyParenDepth != 0) {
+        if (bShowAllMessage)
+            yyMsg(yyParenLineNo)
+                << qPrintable(LU::tr("Unbalanced opening parenthesis in C++ code"
+                                     " (or abuse of the C++ preprocessor)\n"));
+    } else if (yyBracketDepth != 0) {
+        if (bShowAllMessage)
+            yyMsg(yyBracketLineNo)
+                << qPrintable(LU::tr("Unbalanced opening bracket in C++ code"
+                                     " (or abuse of the C++ preprocessor)\n"));
+    }
 }
 
 void CppParser::processComment()
@@ -2328,10 +2407,15 @@ const ParseResults *CppParser::recordResults(bool isHeader)
     }
 }
 
+QString CppParser::getAllLineNumber()
+{
+    return strAllLineNumber;
+}
+
 void loadCPP(Translator &translator, const QStringList &filenames, ConversionData &cd)
 {
     QTextCodec *codec = QTextCodec::codecForName(cd.m_sourceIsUtf16 ? "UTF-16" : "UTF-8");
-
+    QString allPossibleVarFunc;
     foreach (const QString &filename, filenames) {
         if (!CppFiles::getResults(filename).isEmpty() || CppFiles::isBlacklisted(filename))
             continue;
@@ -2352,6 +2436,16 @@ void loadCPP(Translator &translator, const QStringList &filenames, ConversionDat
         QSet<QString> inclusions;
         parser.parse(cd, QStringList(), inclusions);
         parser.recordResults(isHeader(filename));
+
+        QString str = parser.getAllLineNumber();
+        if (!str.isEmpty())
+            allPossibleVarFunc += (filename + QLatin1Char('[') + str.left(str.lastIndexOf(QLatin1Char(';'))) + QLatin1String("]\n"));
+    }
+    if (cd.m_bRecordVarFuncPos)
+    {
+        printf("------------------------possiable var func-------------------------\n");
+        printf("%s", allPossibleVarFunc.toStdString().c_str());
+        printf("-------------------------------------------------------------------\n");
     }
 
     foreach (const QString &filename, filenames) {

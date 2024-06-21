@@ -313,18 +313,22 @@ int applySameTextHeuristic(Translator &tor)
 
 Translator merge(
     const Translator &tor, const Translator &virginTor, const QList<Translator> &aliens,
-    UpdateOptions options, QString &err)
+    UpdateOptions options, QString &err, const QString& tsFileName)
 {
     int known = 0;
     int neww = 0;
     int obsoleted = 0;
     int similarTextHeuristicCount = 0;
-
+    int finished_obsoleted = 0;
+    int unfinished_obsoleted = 0;
+    int unfinished_now = 0;
     Translator outTor;
     outTor.setLanguageCode(tor.languageCode());
     outTor.setSourceLanguageCode(tor.sourceLanguageCode());
     outTor.setLocationsType(tor.locationsType());
 
+    QString fileName = tsFileName.split(QLatin1Char('/')).last();
+    QStringList deletedTranslation;
     /*
       The types of all the messages from the vernacular translator
       are updated according to the virgin translator.
@@ -344,18 +348,35 @@ Translator merge(
             if (mvi < 0) {
                 if (!(options & HeuristicSimilarText)) {
                   makeObsolete:
+                    QString oldType;
                     switch (m.type()) {
                     case TranslatorMessage::Finished:
                         newType = TranslatorMessage::Vanished;
                         obsoleted++;
+                        finished_obsoleted++;
+                        oldType = QLatin1String("Finished");
                         break;
                     case TranslatorMessage::Unfinished:
                         newType = TranslatorMessage::Obsolete;
                         obsoleted++;
+                        unfinished_obsoleted++;
+                        oldType = QLatin1String("UnFinished");
                         break;
                     default:
                         newType = m.type();
                         break;
+                    }
+                    if (TranslatorMessage::Finished == m.type()
+                        || TranslatorMessage::Unfinished == m.type()) {
+                        QString strContext = !m.context().isEmpty() ? m.context() : m.id();
+                        QString strSource = m.sourceText();
+                        QString strTranslation = m.translation();
+                        QString separator = QLatin1String("\",\"");
+                        QString recordMesssage = fileName + QLatin1String(",\"") + strContext.replace(QLatin1String("\""), QLatin1String("\"\""))
+                                                  + separator + strSource.replace(QLatin1String("\""), QLatin1String("\"\""))
+                                                  + separator + strTranslation.replace(QLatin1String("\""), QLatin1String("\"\""))
+                                                  + separator + oldType + QLatin1String("\"\n");
+                        deletedTranslation.append(recordMesssage);
                     }
                     m.clearReferences();
                 } else {
@@ -380,6 +401,7 @@ Translator merge(
                     // Mark it as unfinished. (Since the source text
                     // was changed it might require re-translating...)
                     newType = TranslatorMessage::Unfinished;
+                    unfinished_now++;
                     ++similarTextHeuristicCount;
                     neww++;
                     goto outdateSource;
@@ -393,6 +415,7 @@ Translator merge(
                         || mv->comment() != m.comment())) {
                     known++;
                     newType = TranslatorMessage::Unfinished;
+                    unfinished_now++;
                     m.setContext(mv->context());
                     m.setComment(mv->comment());
                     if (mv->sourceText() != m.sourceText()) {
@@ -411,11 +434,13 @@ Translator merge(
                             newType = TranslatorMessage::Finished;
                         } else {
                             newType = TranslatorMessage::Unfinished;
+                            unfinished_now++;
                         }
                         known++;
                         break;
                     case TranslatorMessage::Unfinished:
                         newType = TranslatorMessage::Unfinished;
+                        unfinished_now++;
                         known++;
                         break;
                     case TranslatorMessage::Vanished:
@@ -424,6 +449,7 @@ Translator merge(
                         break;
                     case TranslatorMessage::Obsolete:
                         newType = TranslatorMessage::Unfinished;
+                        unfinished_now++;
                         neww++;
                         break;
                     }
@@ -443,7 +469,21 @@ Translator merge(
         }
 
         m.setType(newType);
-        outTor.append(m);
+        outTor.appendSorted(m);
+    }
+    if (!deletedTranslation.isEmpty() && (options & RecordDeletedTr)) {
+        QString csvFileName = tsFileName.left(tsFileName.indexOf(QLatin1String(".ts"))) + QLatin1String(".csv");
+        QFile file(csvFileName);
+        if (file.open(QIODevice::WriteOnly)) {
+            QTextStream out(&file);
+            out << "TS Name," << "Context," << "Source," << "Translation," << "Type," << "\n";
+            foreach (QString dTrans, deletedTranslation)
+                out << dTrans;
+            file.close();
+        }
+        else {
+            printf("%s open failed\n", fileName.toStdString().c_str());
+        }
     }
 
     /*
@@ -470,10 +510,9 @@ Translator merge(
                 }
             }
         }
-        if (options & NoLocations)
-            outTor.append(mv);
-        else
-            outTor.appendSorted(mv);
+        outTor.appendSorted(mv);
+        if (TranslatorMessage::Unfinished == mv.type())
+            unfinished_now++;
         if (!mv.sourceText().isEmpty() || !mv.id().isEmpty())
             ++neww;
     }
@@ -505,10 +544,7 @@ Translator merge(
                 mv.clearReferences();
                 mv.setType(mv.type() == TranslatorMessage::Finished
                            ? TranslatorMessage::Vanished : TranslatorMessage::Obsolete);
-                if (options & NoLocations)
-                    outTor.append(mv);
-                else
-                    outTor.appendSorted(mv);
+                outTor.appendSorted(mv);
                 ++known;
                 ++obsoleted;
             }
@@ -529,9 +565,13 @@ Translator merge(
     int sameNumberHeuristicCount = (options & HeuristicNumber) ? applyNumberHeuristic(outTor) : 0;
 
     if (options & Verbose) {
-        int totalFound = neww + known;
-        err += LU::tr("    Found %n source text(s) (%1 new and %2 already existing)\n", 0, totalFound).arg(neww).arg(known);
-
+        printf("------------------This round of update exist %d translations\n", neww + known);
+        if (unfinished_now)
+            printf("------------------This round of update exist %d unfinished types of translations\n", unfinished_now);
+        if (finished_obsoleted)
+            printf("------------------This round of update has deleted %d finished types of translations\n", finished_obsoleted);
+        if (unfinished_obsoleted)
+            printf("------------------This round of update has deleted %d unfinished types of translations\n", unfinished_obsoleted);        
         if (obsoleted) {
             if (options & NoObsolete) {
                 err += LU::tr("    Removed %n obsolete entries\n", 0, obsoleted);

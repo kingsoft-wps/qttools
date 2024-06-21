@@ -59,6 +59,8 @@ public:
         m_sortContexts(false),
         m_noUiLines(false),
         m_idBased(false),
+        m_bShowAllMessage(false),
+        m_bRecordVarFuncPos(false),
         m_saveMode(SaveEverything)
     {}
 
@@ -96,6 +98,8 @@ public:
     bool m_sortContexts;
     bool m_noUiLines;
     bool m_idBased;
+    bool m_bShowAllMessage;
+    bool m_bRecordVarFuncPos;
     TranslatorSaveMode m_saveMode;
 };
 
