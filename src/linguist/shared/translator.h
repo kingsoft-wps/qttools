@@ -61,6 +61,7 @@ public:
         m_idBased(false),
         m_bShowAllMessage(false),
         m_bRecordVarFuncPos(false),
+        m_bSortAtLetter(false),
         m_saveMode(SaveEverything)
     {}
 
@@ -100,6 +101,7 @@ public:
     bool m_idBased;
     bool m_bShowAllMessage;
     bool m_bRecordVarFuncPos;
+    bool m_bSortAtLetter;
     TranslatorSaveMode m_saveMode;
 };
 

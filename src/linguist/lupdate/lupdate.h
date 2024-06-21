@@ -58,7 +58,8 @@ enum UpdateOption {
     SourceIsUtf16 = 4096,
     IgnoreNotImportMessage = 8192,
     RecordVarFuncPos = 16384,
-    RecordDeletedTr = 32768
+    RecordDeletedTr = 32768,
+    SortAtLetter = 65536
 };
 
 Q_DECLARE_FLAGS(UpdateOptions, UpdateOption)

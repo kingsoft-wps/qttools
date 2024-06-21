@@ -245,6 +245,8 @@ static void printUsage()
         "           the ***.csv file (*** depends on ***.ts).\n"
         "    -no-sort\n"
         "           Do not sort contexts in TS files.\n"
+        "    -sort-at-letter\n"
+        "           Sort source alphabetically in TS files, default sort at number.\n"
         "    -no-recursive\n"
         "           Do not recursively scan directories.\n"
         "    -recursive\n"
@@ -352,6 +354,7 @@ static void updateTsFiles(const Translator &fetchedTor, const QStringList &tsFil
         ConversionData cd;
         Translator tor;
         cd.m_sortContexts = !(options & NoSort);
+        cd.m_bSortAtLetter = options & SortAtLetter;
         if (QFile(fileName).exists()) {
             if (!tor.load(fileName, cd, QLatin1String("auto"))) {
                 printErr(cd.error());
@@ -986,6 +989,9 @@ int main(int argc, char **argv)
         } else if (arg == QLatin1String("-no-sort")
                    || arg == QLatin1String("-nosort")) {
             options |= NoSort;
+            continue;
+        } else if (arg == QLatin1String("-sort-at-letter")) {
+            options |= SortAtLetter;
             continue;
         } else if (arg == QLatin1String("-version")) {
             printOut(LU::tr("lupdate version %1\n").arg(QLatin1String(QT_VERSION_STR)));

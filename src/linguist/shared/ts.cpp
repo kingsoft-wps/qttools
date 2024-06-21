@@ -512,6 +512,14 @@ static void writeVariants(QTextStream &t, const char *indent, const QString &inp
     }
 }
 
+bool sortFunc(const TranslatorMessage &msg1, const TranslatorMessage &msg2)
+{
+    return QString::compare(
+                msg1.id() + QLatin1Char('\x01') + msg1.sourceText() + QLatin1Char('\x01') + msg1.comment(),
+                msg2.id() + QLatin1Char('\x01') + msg2.sourceText() + QLatin1Char('\x01') + msg2.comment(), 
+                Qt::CaseSensitive) < 0;
+}
+
 bool saveTS(const Translator &translator, QIODevice &dev, ConversionData &cd)
 {
     bool result = true;
@@ -568,7 +576,10 @@ bool saveTS(const Translator &translator, QIODevice &dev, ConversionData &cd)
              "    <name>"
           << protect(context)
           << "</name>\n";
-        foreach (const TranslatorMessage &msg, messageOrder[context]) {
+        QList<TranslatorMessage> &messages = messageOrder[context];
+        if (cd.m_bSortAtLetter)
+            std::sort(messages.begin(), messages.end(), sortFunc); 
+        foreach (const TranslatorMessage &msg, messages) {
             //msg.dump();
 
                 t << "    <message";

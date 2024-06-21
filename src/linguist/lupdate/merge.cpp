@@ -469,7 +469,10 @@ Translator merge(
         }
 
         m.setType(newType);
-        outTor.appendSorted(m);
+        if (options & SortAtLetter)
+            outTor.append(m);
+        else
+            outTor.appendSorted(m);
     }
     if (!deletedTranslation.isEmpty() && (options & RecordDeletedTr)) {
         QString csvFileName = tsFileName.left(tsFileName.indexOf(QLatin1String(".ts"))) + QLatin1String(".csv");
@@ -510,7 +513,10 @@ Translator merge(
                 }
             }
         }
-        outTor.appendSorted(mv);
+        if (options & SortAtLetter)
+            outTor.append(mv);
+        else
+            outTor.appendSorted(mv);
         if (TranslatorMessage::Unfinished == mv.type())
             unfinished_now++;
         if (!mv.sourceText().isEmpty() || !mv.id().isEmpty())
@@ -544,7 +550,10 @@ Translator merge(
                 mv.clearReferences();
                 mv.setType(mv.type() == TranslatorMessage::Finished
                            ? TranslatorMessage::Vanished : TranslatorMessage::Obsolete);
-                outTor.appendSorted(mv);
+                if (options & SortAtLetter)
+                    outTor.append(mv);
+                else
+                    outTor.appendSorted(mv);
                 ++known;
                 ++obsoleted;
             }
