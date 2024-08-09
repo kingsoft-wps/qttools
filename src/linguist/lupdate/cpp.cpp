@@ -472,6 +472,7 @@ CppParser::TokenType CppParser::lookAheadToSemicolonOrLeftBrace()
 
 STRING(Q_OBJECT);
 STRING(class);
+STRING(enum);
 STRING(final);
 STRING(friend);
 STRING(namespace);
@@ -2093,7 +2094,34 @@ void CppParser::parseInternal(ConversionData &cd, const QStringList &includeStac
                 // member or base class identifier
                 yyTokIdentSeen = true;
             }
-            yyTok = getToken();
+
+            if (yyWord == strenum) {
+                yyTok = getToken();
+                if (yyTok == Tok_class) {
+                    //it is a enum class
+                    do {
+                        yyTok = getToken();
+                        if (yyTok == Tok_Eof)
+                            goto goteof;
+                        if (yyTok == Tok_Cancel)
+                            goto case_default;
+                    } while (yyTok != Tok_LeftBrace && yyTok != Tok_Semicolon);
+
+                    if (yyTok != Tok_Semicolon) {
+                        do {
+                            yyTok = getToken();
+                            if (yyTok == Tok_Eof)
+                                goto goteof;
+                            if (yyTok == Tok_Cancel)
+                                goto case_default;
+                        } while (yyTok != Tok_RightBrace);
+                    }
+                    break;
+                }
+            } else {
+                yyTok = getToken();
+            }
+
             if (yyTok == Tok_LeftParen) {
                 bool forcePlural = false;
                 switch (trFunctionAliasManager.trFunctionByName(yyWord)) {
