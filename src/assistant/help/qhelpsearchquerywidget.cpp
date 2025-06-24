@@ -203,7 +203,6 @@ private:
     bool m_compactMode = false;
 };
 
-#include "qhelpsearchquerywidget.moc"
 
 
 /*!
@@ -388,3 +387,5 @@ void QHelpSearchQueryWidget::changeEvent(QEvent *event)
 }
 
 QT_END_NAMESPACE
+
+#include "qhelpsearchquerywidget.moc"

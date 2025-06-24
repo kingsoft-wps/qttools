@@ -268,7 +268,6 @@ private:
     QString m_searchInput;
 };
 
-#include "qhelpsearchengine.moc"
 
 /*!
     \class QHelpSearchQuery
@@ -591,3 +590,5 @@ void QHelpSearchEngine::indexDocumentation()
 }
 
 QT_END_NAMESPACE
+
+#include "qhelpsearchengine.moc"
